@@ -1,10 +1,12 @@
-
 #install.packages('glue')
 #install.packages("readxl")
 #install.packages("corrplot")
 # install.packages("ggpubr")
-# 라이브러리 로드
+# install.packages("leaflet")
+# install.packages("ggmap")
 
+library(ggmap)
+library(leaflet)
 library(ggpubr)
 library(readxl)
 library(jsonlite)
@@ -16,10 +18,25 @@ library(tidyr)
 library(stringr)
 library(corrplot)
 
+#인구
 url = ""
+#아동센터
+senter_url = ""
+#어린이집
+little_url <- ""
+#구글맵 키
+ggmap_key <- ""
+#면적 파일
+area_df_first <- read_excel("C:/Users/mmnnb/Documents/창원시면적.xlsx")
+#초등학교 위치 파일
+elementary_school_data <-read_excel("C:/Users/mmnnb/Documents/전국초중등학교위치표준데이터.xls")
+#창원시 공원
+changwon_park<-read_excel("C:/Users/mmnnb/Documents/경상남도 창원시_도시공원 현황.xlsx")
+#기초생활 수급권자
+basic_df <- read_excel("C:/Users/mmnnb/Desktop/BIK/새 폴더/기초생활보장 수급권자수 현황(2022년1월~12월)/기준연월_2022-12_기초생활보장 수급권자구분별 총괄 현황.xlsx")
 
+#인구 데이터 전처리
 valueJson = fromJSON(url)
-print(head(valueJson))
 dfJson = data.frame(valueJson$data)
 
 # 연령을 10살 단위로 묶어서 합치는 함수
@@ -34,19 +51,15 @@ combine_age <- function(age) {
   }
   return(NA)
 }
+
 # 행정기관별 연령을 10살 기준으로 묶어서 합치기
 dfJson$연령대 <- sapply(dfJson$연령.만., combine_age)
 
-# 결과 출력
-dfJson
-
-#결과 출력
+#0~19살 까지 묶기
 filteredData <- filter(dfJson, 연령대 %in% c("0", "10"))
-filteredData
 
 # 행정기관 열의 고유한 값 추출
 unique_values <- unique(filteredData$행정기관)
-unique_values
 
 # 1동과 2동을 하나의 동으로 묶기 위한 함수
 combine_dongs <- function(dong) {
@@ -65,15 +78,13 @@ combine_dongs <- function(dong) {
   if (dong %in% c("양덕1동", "양덕2동")) {
     return("양덕동")
   }
-   else {
+  else {
     return(dong)
   }
 }
 
-# 행정기관 열 값 변경
+# 행정기관 열 값 변경함수 적용 (1동,2동 합치기)
 filteredData$행정기관 <- sapply(filteredData$행정기관, combine_dongs)
-unique(filteredData$행정기관)
-
 
 # '행정기관' 별로 '남'과 '여'의 합 계산
 summary_df <- filteredData %>%
@@ -104,26 +115,22 @@ ggplot(df, aes(x = 행정기관, y = `인구 수`, fill = 성별)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   coord_flip()
 
-#전체 인구수 구하기
+#수급자 비율을 위한 전체 인구수 구하기
 everyData <- filter(dfJson, 연령대 %in% c("0", "10","30","40","50","60","70","80","90"))
 everyData$행정기관 <- sapply(everyData$행정기관, combine_dongs)
 summary_every_df <- everyData %>%
   group_by(행정기관) %>%
   summarize(남 = sum(남), 여 = sum(여))
-summary_every_df
 summary_every_df <- summary_every_df %>%
   mutate(합계 = 남 + 여) %>%
   arrange(desc(합계)) 
 summary_every_df <- summary_every_df %>%
   select(-남, -여)
-summary_every_df
 
-#아동센터
-senter_url = ""
+#아동센터 카운트를 위한 전처리
 senter_json = fromJSON(senter_url)
 print(head(senter_json))
 senter_df = data.frame(senter_json$data)
-senter_df
 
 #동만 추출
 filteredData <- senter_df %>%
@@ -132,9 +139,6 @@ filteredData <- senter_df %>%
 #괄호제거
 filteredData <- filteredData %>%
   mutate(행정주소 = str_replace_all(행정주소, "[[:punct:]]", ""))
-
-filteredData
-nrow(filteredData)
 
 #결측치행 처리
 filteredData_missing <- filteredData %>%
@@ -154,7 +158,7 @@ filteredData <- filteredData %>%
   mutate(행정주소 = coalesce(행정주소.x, 행정주소.y)) %>%
   select(-행정주소.x, -행정주소.y)
 
-#동이름이 좀 이상해서 수정
+#동이름이 이상한것들 수정
 filteredData$행정주소 <- gsub("가음동", "가음정동", filteredData$행정주소)
 filteredData$행정주소 <- gsub("봉곡동 코오롱아파트 상가동", "봉곡동", filteredData$행정주소)
 
@@ -206,8 +210,6 @@ filteredData$행정주소 <- gsub("팔용동", "팔룡동", filteredData$행정�
 # 행정주소별 등장 횟수 카운트
 address_counts <- filteredData %>%
   count(행정주소, name = "아동센터 수")
-address_counts
-nrow(address_counts)
 
 #결과 합치기
 merged_df <- merge(address_counts, summary_df1, by.x = "행정주소", by.y = "행정기관", all.y = TRUE)
@@ -215,15 +217,10 @@ merged_df[is.na(merged_df)] <- 0
 
 # 행정기관 열의 고유한 값 추출
 unique_values_merged_df <- unique(merged_df$행정주소)
-unique_values_merged_df
 
 #아동센터는 82개인데 60개만 merge됨
 sum(address_counts$'아동센터 수')
 sum(merged_df$'아동센터 수')
-
-#엑셀 파일 읽기
-area_df_first <- read_excel("C:/Users/mmnnb/Documents/창원시면적.xlsx")
-area_df_first
 
 #행정주소 별로 면적을 구하는 전처리하기
 colnames(area_df_first) <-area_df_first[2, ]
@@ -239,11 +236,11 @@ merged_area_df <- merge(merged_df, area_df_end, by.x = "행정주소", by.y = "�
 colnames(merged_area_df)[6] <- "면적"
 
 #인구밀도 추가하기
+#인구밀도는 아동 및 청소년 인구 / 면적으로 진행
 merged_area_df <- merged_area_df[, -c(3, 4)]  # "남", "여" 컬럼 제거
 merged_area_df$인구밀도 <- merged_area_df$합계 / merged_area_df$면적
 
 #초등학교 개수 추출
-elementary_school_data <-read_excel("C:/Users/mmnnb/Documents/전국초중등학교위치표준데이터.xls")
 elementary_school_changwon <- elementary_school_data[grep("창원시", elementary_school_data$소재지도로명주소), ]
 elementary_school_changwon <- elementary_school_changwon[grep("초등학교", elementary_school_changwon$학교급구분), ] 
 
@@ -253,10 +250,10 @@ elementary_school_changwon <- elementary_school_changwon %>%
 
 #결측치 2개 있음
 #이유는 주소가 기입되어 있지 않음
-elementary_school_changwon$행정주소
 elementary_school_changwon$행정주소[[12]]="의창동"
 elementary_school_changwon$행정주소[[81]]="용원동"
 
+#행정주소명 변경
 elementary_school_changwon$행정주소 <- gsub("가음동", "가음정동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("남문동", "웅천동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("대방동", "가음정동", elementary_school_changwon$행정주소)
@@ -283,7 +280,7 @@ elementary_school_changwon$행정주소 <- gsub("도천동", "여좌동", elemen
 elementary_school_changwon$행정주소 <- gsub("두척동", "회성동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("명서동", "명곡동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("반림동", "반송동", elementary_school_changwon$행정주소)
-elementary_school_changwon$행정주소 <- gsub("사림동", "용지동", elementary_school_changwon$행정주소)
+elementary_school_changwon$행정주소 <- gsub("사림동", "봉림동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("삼정자동", "가음정동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("성호동", "교방동", elementary_school_changwon$행정주소)
 elementary_school_changwon$행정주소 <- gsub("신촌동", "웅남동", elementary_school_changwon$행정주소)
@@ -299,9 +296,8 @@ elementary_school_changwon$행정주소 <- gsub("청안동", "웅동", elementar
 elementary_count <- elementary_school_changwon %>%
   count(행정주소, name = "초등학교 수")
 
-#면적 추가하기
+#초등학교 추가하기
 merged_elementary_df <- merge(merged_area_df, elementary_count , by.x = "행정주소", by.y = "행정주소", all.x = TRUE)
-merged_elementary_df
 not_merged_rows <- elementary_count[!(elementary_count$행정주소 %in% merged_elementary_df$행정주소), ]
 
 #덕산초인데 자은동에 있어서 따로 수정...
@@ -311,33 +307,27 @@ merged_elementary_df[37,"초등학교 수"]=2
 merged_elementary_df[is.na(merged_elementary_df)] <- 0
 
 #기초생활보장 수급권자
-basic_df <- read_excel("C:/Users/mmnnb/Desktop/BIK/새 폴더/기초생활보장 수급권자수 현황(2022년1월~12월)/기준연월_2022-12_기초생활보장 수급권자구분별 총괄 현황.xlsx")
 basic_df <- basic_df[-c(1:10), ]
 basic_df=basic_df[, 3:4]
 colnames(basic_df) <- c("행정주소", "수급권자")
 
-
-print(basic_df, n=57)
-# 행정기관 열 값 변경
+# 행정기관 열 값 변경 (1동,2동 합치기)
 basic_df$행정주소 <- sapply(basic_df$행정주소, combine_dongs)
 basic_df <- basic_df %>%
   group_by(행정주소) %>%
   summarise(수급권자 = sum(as.numeric(수급권자)))
 
-#수급권자 추가하기
+#수급권자 수 추가하기
 merged_basic_df <- merge(merged_elementary_df, basic_df, by.x = "행정주소", by.y = "행정주소", all.x = TRUE)
 merged_basic_df$수급권자 <- as.numeric(merged_basic_df$수급권자)
 
-#전체인구 추가하기
+#수급권자비율은 수급권자 / 전체인구로 진행
 merged_basic_df <- merge(merged_basic_df, summary_every_df, by.x = "행정주소", by.y = "행정기관", all.x = TRUE)
-merged_basic_df
-colnames(merged_basic_df)
 merged_basic_df$수급권자 <- merged_basic_df$수급권자 / merged_basic_df$합계.y
 merged_basic_df <- merged_basic_df[, -which(colnames(merged_basic_df) == "합계.y")]
 
 # 상관계수 행렬 생성
 cor_matrix <- cor(merged_basic_df[, c("아동센터 수", "합계.x", "면적", "인구밀도","초등학교 수","수급권자")])
-cor_matrix 
 corrplot(cor_matrix, method = 'color', order = 'alphabet')
 
 # 클러스터링에 사용할 변수 선택
@@ -352,10 +342,7 @@ cluster_data_scaled <- scale(cluster_data)
 # PCA 수행
 pca_result <- prcomp(cluster_data_scaled, scale = TRUE)
 
-# 주성분 요약 정보 출력
-summary(pca_result)
-
-# 주성분 개수 선택 (예: 3개)
+# 주성분 개수 선택
 num_components <- 2
 
 # 선택한 주성분 개수로 PCA 변환 수행
@@ -384,9 +371,6 @@ cluster_centers_pca <- kmeans_result_pca$centers
 # 클러스터링 결과를 데이터프레임에 추가
 merged_basic_df$Cluster_PCA <- cluster_labels_pca
 
-# 클러스터링 결과 출력
-print(merged_basic_df)
-
 # PCA 데이터 시각화
 pca_data_df <- as.data.frame(pca_data)
 pca_data_df$Cluster <- factor(cluster_labels_pca)
@@ -404,7 +388,7 @@ ggplot(pca_data_df, aes(x = PC1, y = PC2, color = Cluster, label = merged_basic_
     plot.title = element_text(size = 14, face = "bold"),
     legend.text = element_text(size = 10)
   )
-merged_basic_df
+
 #컬럼명 변경
 colnames(merged_basic_df) <- c("행정주소","아동센터_수","합계","면적","인구밀도","초등학교_수","수급권자","Cluster_PCA")
 
@@ -460,10 +444,56 @@ plot6 <- ggplot(summary_df, aes(x = Cluster_PCA, y = Avg_수급권자, fill = Cl
 ggarrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol = 2, nrow = 3)
 
 #군집 분석
-merged_basic_df
 merged_basic_df[merged_basic_df$아동센터_수 == 0, ]
 merged_basic_df[merged_basic_df$Cluster_PCA == 1, ]
 merged_basic_df[merged_basic_df$Cluster_PCA == 2, ]
 merged_basic_df[merged_basic_df$Cluster_PCA == 3, ]
 merged_basic_df[merged_basic_df$Cluster_PCA == 4, ]
 merged_basic_df[merged_basic_df$Cluster_PCA == 5, ]
+
+#웅남동
+
+little_dataJson = fromJSON(little_url)
+print(head(little_dataJson))
+little_datadf = data.frame(little_dataJson$data)
+little_datadf=little_datadf[little_datadf$시군구명 == "창원시 성산구", ]
+
+#어린이집 위도 경도 가져오기
+# register_google(ggmap_key)
+# 
+# little_data <- mutate_geocode(data = little_datadf, location = 소재지도로명주소, source = "google")
+# 
+# little_data <- na.omit(little_data)
+# write.csv(little_data, "little_data.csv", row.names = FALSE)
+
+#매번 불러올 수 없기에 저장하여서 사용
+little_data=loaded_data <- read.csv("little_data.csv")
+
+# leaflet 맵 객체 생성
+map <- leaflet() %>%
+  addTiles()  
+
+# 어린이집 표시
+map <- map %>%
+  addCircleMarkers(data = little_data, ~lon, ~lat, radius = 10,
+                   stroke = FALSE, fillOpacity = 1, color = "red")
+
+#양곡초 표시
+shinchonco=elementary_school_changwon[elementary_school_changwon$학교명 == "양곡초등학교", ]
+shinchonco$위도 <- as.numeric(shinchonco$위도)
+shinchonco$경도 <- as.numeric(shinchonco$경도)
+map <- map %>%
+  addCircleMarkers(data = shinchonco, ~경도, ~위도, radius = 10,
+                   stroke = FALSE, fillOpacity = 1, color = "blue")
+
+#어린이공원 표시
+changwon_park=changwon_park[changwon_park$공원명 == "어린이공원", ]
+changwon_park$위도 <- as.numeric(changwon_park$위도)
+changwon_park$경도 <- as.numeric(changwon_park$경도)
+map <- map %>%
+  addCircleMarkers(data = changwon_park, ~경도, ~위도, radius = 10,
+                   stroke = FALSE, fillOpacity = 1, color = "green")
+ 
+
+
+
