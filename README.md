@@ -18,10 +18,16 @@
 
 <p>
   상관 관계가 높은 변수들은 유사한 정보를 제공할 수 있으므로, 군집 분석에서 불필요한 중복 정보를 제거하거나 차원 축소를 진행
+</p>
 <img src="https://github.com/bidulgi123/Toy_Project_Using_R/assets/121657338/112a2566-042c-4920-ba55-a129588c9466">
 <img src="https://github.com/bidulgi123/Toy_Project_Using_R/assets/121657338/544effdb-2ff0-4e7c-b983-7084d44f406b">
+<p>
+  엘보우 기법을 통해 기울기가 완만해지는 5개의 클러스터를 기준으로 진행하였으며 각 클러스터별 특징을 파악하여 아동센터 수가 비교적 부족한 곳 보다는 없는 지역 3개를 후보군을 최종 후보군은 인근 아동센터의 위치 거리에 따라 근처 5km이내 없는 웅남동을 선정
+</p>
 <img src="https://github.com/bidulgi123/Toy_Project_Using_R/assets/121657338/53f38d52-d271-48d5-9e4e-2aecee3d3a3b">
 <img src="https://github.com/bidulgi123/Toy_Project_Using_R/assets/121657338/bd6a5635-73fb-49ea-9b99-0c486c816f48">
-
+<p>
+  인근 공원, 어린이집, 초등학교등 위치를 파악하여 최종 입지 선정
+</p>
 </p>
 
